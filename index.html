@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<title>Ticket Editor</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="description" content="">
+<meta name="author" content="">
+<link rel="canonical" href="https://getbootstrap.com/docs/4.0/examples/starter-template/">
+<!-- Bootstrap core CSS -->
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+<!-- Custom styles for this template -->
+<script type="text/javascript" src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.9/dist/css/bootstrap-select.min.css">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.9/dist/js/bootstrap-select.min.js"></script>
+<style type="text/css">
+    div{
+        padding:8px;
+    }
+    label{
+        font-size:10pt;
+    }
+    .ticket {
+        color: #FFF;
+        text-align: center;
+        padding: 5px;
+        position: absolute;
+        cursor: default;
+        width: 250px;
+        border-radius: 5px;
+    }
+    .auto-resize{
+        width: 100%;
+        font-size:9pt;
+    }
+    .story-point{
+        border: 0px;
+        font-size:8pt;
+        color:darkslategray;
+    }
+    .color-dialog{
+        width:30px;
+    }
+    .ticketno{
+        float:left;
+        font-size:10pt;
+        margin-right:30px;
+        color:black;
+    }
+    .annotation{
+        font-size:10pt;
+        margin-left:10pt;
+        margin-right:1pt;
+        color:darkslategray;
+    }
+    body {
+        margin-left: 0px;
+        margin-top: 0px;
+    }
+</style>
+</head>
+
+<body>
+<script type="text/javascript">
+$(document).ready(function(){
+
+    //create web socket
+    var ws = new WebSocket("ws://localhost:9999/");
+
+    //client id
+    var client_id = 0;
+
+    //positions
+    var posX1 = 0;
+    var posY1 = 0;
+    var posX2 = 0;
+    var posY2 = 0;
+    var scrX = 0;
+    var scrY = 0;
+    var scrX2 = 0;
+    var scrY2 = 0;
+    //moving object
+    var moving = null;
+
+    //editimg object
+    var editing = null;
+
+    //web socket open
+    ws.onopen = function(message){
+        console.log(message.type);
+        var data = {
+            "method": "none"
+        }
+        var jsonString = JSON.stringify(data);
+        ws.send(jsonString);
+    };
+
+    //web socket message receive
+    ws.onmessage = function(message){
+        var data = $.parseJSON(message.data);
+        switch(data.method){
+            case "notifyClientID":
+                client_id = Number(data.client_id);
+                break;
+            case "initTicket":
+                //add ticket
+                var newTextBoxDiv = $(document.createElement('div')).attr("id", 'TextBoxDiv' + data.ticket_id);
+                newTextBoxDiv.attr("class", 'ticket');
+                newTextBoxDiv.after().html(
+                    '<button type="button" class="close" style="margin-top:-8px;">&times;</button>' 
+                    + '<textarea></textarea>'
+                    + '<text class="ticketno">#' + data.ticket_id + '</text>'
+                    + '<text class="annotation">Point:</text>'
+                    + '<select class="story-point">'
+                    + '<option hidden>-</option>'
+                    + '<option>0.5</option>'
+                    + '<option>1</option>'
+                    + '<option>1.5</option>'
+                    + '<option>2</option>'
+                    + '<option>3</option>'
+                    + '<option>4</option>'
+                    + '<option>5</option>'
+                    + '<option>8</option>'
+                    + '<option>13</option>'
+                    + '</select>'
+                    + '<text class="annotation">Color:</text>'
+                    + '<input class="color-dialog" type="color" value="' + data.color + '">');
+                //set textarea to readonly
+                var textarea = newTextBoxDiv.children("textarea");
+                textarea.attr("class", 'auto-resize');
+                textarea.attr('readonly',true);
+                newTextBoxDiv.appendTo("#TextBoxesGroup");
+                //set position
+                var parent = $("#TextBoxDiv" + data.ticket_id);
+                if(data.top != 0){
+                    parent.css("top", Number(data.top));
+                }
+                if(data.left != 0){
+                    parent.css("left", Number(data.left));
+                }
+                //set text
+                var textarea = parent.children('textarea.auto-resize');
+                let binary = atob(data.text);
+                let len = binary.length;
+                let bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++)        {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                text = (new TextDecoder).decode(bytes)
+                textarea.val(text);
+                var outerHeight = textarea.outerHeight();
+                var schrollHeight = textarea.prop('scrollHeight');
+                if (textarea.outerHeight() > textarea.prop('scrollHeight')){
+                    textarea.height(1);
+                }
+                while (textarea.outerHeight() < textarea.prop('scrollHeight')){
+                    textarea.height(textarea.height() + 1);
+                }
+                //set point
+                parent.children('select.story-point').val(data.point);
+                var totalpoints = 0;
+                $('select.story-point').each(function(i, elm){
+                    if($(elm).val() != "-"){
+                        totalpoints += Number($(elm).val());
+                    }
+                });
+                $('#total-point').text('Total : ' + String(totalpoints));
+                //set color
+                parent.css('background', data.color);
+                parent.children('textarea.auto-resize').css('background', data.color);
+                parent.children('select.story-point').css('background', data.color);
+                parent.children('input.color-dialog').val(data.color);
+                break;
+            case "addTicket":
+                //add ticket
+                var newTextBoxDiv = $(document.createElement('div')).attr("id", 'TextBoxDiv' + data.ticket_id);
+                newTextBoxDiv.attr("class", 'ticket');
+                newTextBoxDiv.after().html(
+                    '<button type="button" class="close" style="margin-top:-8px;">&times;</button>' 
+                    + '<textarea></textarea>'
+                    + '<text class="ticketno">#' + data.ticket_id + '</text>'
+                    + '<text class="annotation">Point:</text>'
+                    + '<select class="story-point" size="1">'
+                    + '<option hidden>-</option>'
+                    + '<option>0.5</option>'
+                    + '<option>1</option>'
+                    + '<option>1.5</option>'
+                    + '<option>2</option>'
+                    + '<option>3</option>'
+                    + '<option>4</option>'
+                    + '<option>5</option>'
+                    + '<option>8</option>'
+                    + '<option>13</option>'
+                    + '</select>'
+                    + '<text class="annotation">Color:</text>'
+                    + '<input class="color-dialog" type="color" value="' + data.color + '"　style＝”float:right”>');
+                //set textarea to readonly
+                var textarea = newTextBoxDiv.children("textarea");
+                textarea.attr("class", 'auto-resize');
+                textarea.attr('readonly',true);
+                newTextBoxDiv.appendTo("#TextBoxesGroup");
+                //set color
+                parent = $("#TextBoxDiv" + data.ticket_id);
+                parent.css('background', data.color);
+                parent.children('textarea.auto-resize').css('background', data.color);
+                parent.children('select.story-point').css('background', data.color);
+                parent.children('input.color-dialog').val(data.color);
+                break;
+            case "moveTicket":
+                if(data.client_id != client_id){
+                    //set element position
+                    var parent = $("#" + data.id);
+                    parent.css("top", Number(data.top));
+                    parent.css("left", Number(data.left));
+                }
+                break;
+            case "fixTicket":
+                if(data.client_id != client_id){
+                    //set element position
+                    var parent = $("#" + data.id);
+                    parent.css("top", Number(data.top));
+                    parent.css("left", Number(data.left));
+                }
+                break;
+            case "editTicket":
+                if(data.client_id != client_id){
+                    var parent = $("#" + data.id);
+                    var textarea = parent.children('textarea.auto-resize');
+                    //set text
+                    let binary = atob(data.text);
+                    let len = binary.length;
+                    let bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++)        {
+                        bytes[i] = binary.charCodeAt(i);
+                    }
+                    text = (new TextDecoder).decode(bytes)
+                    textarea.val(text);
+                    var outerHeight = textarea.outerHeight();
+                    var schrollHeight = textarea.prop('scrollHeight');
+                    if (textarea.outerHeight() > textarea.prop('scrollHeight')){
+                        textarea.height(1);
+                    }
+                    while (textarea.outerHeight() < textarea.prop('scrollHeight')){
+                        textarea.height(textarea.height() + 1);
+                    }
+                }
+                break;
+            case "deleteTicket":
+                var parent = $("#" + data.id);
+                parent.remove();
+                break;
+            case "lockTicket":
+                switch(data.next){
+                    case "editTicket":
+                        if(data.result == "OK"){
+                            var parent = $("#" + data.id);
+                            editing = parent.children('textarea.auto-resize');
+                            editing.attr('readonly', false);
+                            editing.focus();
+                            //editing.attr('selectionEnd', 0);
+                            //editing.attr('selectionStart', 0);                           
+                        }
+                        break;
+                    case "moveTicket":
+                        if(data.result == "OK"){
+                            if(data.client_id == client_id){
+                                moving = $("#" + data.id);
+                                //set element position
+                                pos1 = moving.position();
+                                posX1 = data.left - pos1.left;
+                                posY1 = data.top - pos1.top;
+                                //frame border
+                                moving.css('border', 'solid 1px black');
+                                //zindex
+                                moving.css('position','absolute')
+                                moving.css('zIndex', data.zindex);
+                            } else {
+                                //zindex
+                                $("#" + data.id).css('position','absolute')
+                                $("#" + data.id).css('zIndex', data.zindex);
+                            }
+                        }
+                        break;
+                }
+                break;
+            case "setPoint":
+                if(data.client_id != client_id){
+                    //set point
+                    var parent = $("#" + data.id);
+                    parent.children('select.story-point').val(data.point);
+                }
+                var totalpoints = 0;
+                $('select.story-point').each(function(i, elm){
+                    if($(elm).val() != "-"){
+                        totalpoints += Number($(elm).val());
+                    }
+                });
+                $('#total-point').text('Total : ' + String(totalpoints));
+                break;
+            case "setColor":
+                if(data.client_id != client_id){
+                    var parent = $("#TextBoxDiv" + data.ticket_id);
+                    parent.css('background', data.color);
+                    parent.children('textarea.auto-resize').css('background', data.color);
+                    parent.children('select.story-point').css('background', data.color);
+                    parent.children('input.color-dialog').val(data.color);
+                }
+                break;
+        }
+    }
+
+    //web socket close
+    ws.onclose = function(message){
+        console.log(message.type);
+    };
+
+    //click event (add)
+    $("#addButton").click(function () {
+        var data = {
+            "method": "addTicket",
+            "client_id": client_id,
+            "color": "#00a3d8"
+        }
+        var jsonString = JSON.stringify(data);
+        ws.send(jsonString);
+    });
+
+    //mouse move event
+    $(document).mousemove(function(evt2) {
+        //moving
+        if(moving) {
+            if((evt2.pageY - posY1) >= 70){
+                //specify element position using css
+                posX2 = evt2.pageX - posX1;
+                posY2 = evt2.pageY - posY1;
+                moving.css("left", posX2);
+                moving.css("top", posY2);
+
+                var data = {
+                    "method": "moveTicket",
+                    "client_id": client_id,
+                    "id": moving.attr("id"),
+                    "ticket_id": moving.attr("id").replace(/[^0-9]/g, ''),
+                    "left": posX2,
+                    "top": posY2
+                }
+                var jsonString = JSON.stringify(data);
+                ws.send(jsonString);
+            }
+        }
+    });
+
+    //scrolling event
+    $(window).scroll(function(evt2) {
+        //moving
+        if(moving) {
+            scrX = scrX2;
+            scrY = scrY2;
+            scrX2 = $(this).scrollLeft();
+            scrY2 = $(this).scrollTop();
+            scrXdiff = scrX2 - scrX;
+            scrYdiff = scrY2 - scrY;
+
+            //specify element position using css
+            posX2 = posX2 + scrXdiff;
+            posY2 = posY2 + scrYdiff;
+            moving.css("left", posX2);
+            moving.css("top", posY2);
+
+            var data = {
+                "method": "moveTicket",
+                "client_id": client_id,
+                "id": moving.attr("id"),
+                "ticket_id": moving.attr("id").replace(/[^0-9]/g, ''),
+                "left": posX2,
+                "top": posY2
+            }
+            var jsonString = JSON.stringify(data);
+            ws.send(jsonString);
+        }
+    });
+
+    //change point actions
+    $(document).on('change','select.story-point', function(){
+        if(moving){
+            // require unlock
+            var data = {
+                "method": "releaseTicket",
+                "client_id": client_id,
+                "ticket_id": moving.attr("id").replace(/[^0-9]/g, '')
+            }
+            var jsonString = JSON.stringify(data);
+            ws.send(jsonString);
+            // fix posision
+            var data = {
+                "method": "fixTicket",
+                "client_id": client_id,
+                "id": moving.attr("id"),
+                "ticket_id": moving.attr("id").replace(/[^0-9]/g, ''),
+                "left": posX2,
+                "top": posY2
+            }
+            var jsonString = JSON.stringify(data);
+            ws.send(jsonString);
+            //frame border
+            moving.css('border', '');
+            moving = null
+        }
+        var data = {
+            "method": "setPoint",
+            "client_id": client_id,
+            "id": $(this).parent().attr("id"),
+            "ticket_id": $(this).parent().attr("id").replace(/[^0-9]/g, ''),
+            "point": $(this).val()
+        }
+        var jsonString = JSON.stringify(data);
+        ws.send(jsonString);
+    });
+
+    //delete ticket button click action
+    $(document).on('click','button.close', function(evt1){
+        // delete
+        var data = {
+            "method": "deleteTicket",
+            "client_id": client_id,
+            "id": $(this).parent().attr("id"),
+            "ticket_id": $(this).parent().attr("id").replace(/[^0-9]/g, ''),
+        }
+        var jsonString = JSON.stringify(data);
+        ws.send(jsonString);
+    });
+
+    //textarea click action
+    $(document).on('click','textarea.auto-resize', function(evt1){
+        if(editing){
+            // require unlock
+            var data = {
+                "method": "releaseTicket",
+                "client_id": client_id,
+                "ticket_id": editing.parent().attr("id").replace(/[^0-9]/g, '')
+            }
+            var jsonString = JSON.stringify(data);
+            ws.send(jsonString);
+
+            editing.attr('readonly', true);
+            editing = null;
+        }
+        // require lock
+        var data = {
+            "method": "lockTicket",
+            "client_id": client_id,
+            "id": $(this).parent().attr("id"),
+            "ticket_id": $(this).parent().attr("id").replace(/[^0-9]/g, ''),
+            "next": "editTicket"
+        }
+        var jsonString = JSON.stringify(data);
+        ws.send(jsonString);
+
+        evt1.stopPropagation();
+    });
+
+    //out of textarea click action
+    $(document).on('click',function(e) {
+        if(!$(e.target).closest('textarea.auto-resize').length) {
+            if(editing){
+                // require unlock
+                var data = {
+                    "method": "releaseTicket",
+                    "client_id": client_id,
+                    "ticket_id": editing.parent().attr("id").replace(/[^0-9]/g, '')
+                }
+                var jsonString = JSON.stringify(data);
+                ws.send(jsonString);
+
+                editing.attr('readonly', true);
+                editing = null;
+            }
+        }
+    });
+
+    //ticket click action
+    $(document).on('click', 'div', function(evt1) {
+        var idname = $(this).attr("id");
+        var pattern = 'TextBoxDiv';
+        if(idname.indexOf(pattern)){
+            return
+        }
+
+        //not moving
+        if(moving == null) {
+            if(editing){
+                //require unlock
+                var data = {
+                    "method": "releaseTicket",
+                    "client_id": client_id,
+                    "ticket_id": editing.parent().attr("id").replace(/[^0-9]/g, '')
+                }
+                var jsonString = JSON.stringify(data);
+                ws.send(jsonString);
+
+                editing.attr('readonly', true);
+                editing = null;
+            }
+            //require lock
+            var data = {
+                "method": "lockTicket",
+                "client_id": client_id,
+                "id": $(this).attr("id"),
+                "ticket_id": $(this).attr("id").replace(/[^0-9]/g, ''),
+                "next": "moveTicket",
+                "left": evt1.pageX,
+                "top": evt1.pageY
+            }
+            var jsonString = JSON.stringify(data);
+            ws.send(jsonString);
+        //moving
+        } else if(moving) {
+            //require unlock
+            var data = {
+                "method": "releaseTicket",
+                "client_id": client_id,
+                "ticket_id": moving.attr("id").replace(/[^0-9]/g, '')
+            }
+            var jsonString = JSON.stringify(data);
+            ws.send(jsonString);
+            //fix posision
+            var data = {
+                "method": "fixTicket",
+                "client_id": client_id,
+                "id": moving.attr("id"),
+                "ticket_id": moving.attr("id").replace(/[^0-9]/g, ''),
+                "left": posX2,
+                "top": posY2
+            }
+            var jsonString = JSON.stringify(data);
+            ws.send(jsonString);
+            //frame border
+            moving.css('border', '');
+            moving = null;
+        }
+        evt1.stopPropagation();
+    });
+
+    //textarea input action
+    $(document).on('change keyup keydown paste cut','textarea.auto-resize', function(){
+        var arr = (new TextEncoder).encode($(this).val());
+        let base64String = btoa(String.fromCharCode(...arr));
+        var data = {
+            "method": "editTicket",
+            "client_id": client_id,
+            "id": $(this).parent().attr('id'),
+            "ticket_id": $(this).parent().attr("id").replace(/[^0-9]/g, ''),
+            "text": base64String
+        }
+        var jsonString = JSON.stringify(data);
+        ws.send(jsonString);
+
+        if ($(this).outerHeight() > this.scrollHeight){
+            $(this).height(1);
+        }
+        while ($(this).outerHeight() < this.scrollHeight){
+            $(this).height($(this).height() + 1);
+        }
+    });
+
+    //color change action
+    $(document).on("change",'input.color-dialog', function(evt1){
+        var color =  $(this).val();
+        var parent = $(this).parent();
+        parent.css('background', color);
+        parent.children('textarea.auto-resize').css('background', color);
+        parent.children('select.story-point').css('background', color);
+
+        var data = {
+            "method": "setColor",
+            "client_id": client_id,
+            "id": $(this).parent().attr('id'),
+            "ticket_id": $(this).parent().attr("id").replace(/[^0-9]/g, ''),
+            "color": color
+        }
+        var jsonString = JSON.stringify(data);
+        ws.send(jsonString);
+
+        evt1.stopPropagation();
+    });
+    $(document).on("click",'input.color-dialog', function(evt1){
+        evt1.stopPropagation();
+    });
+});
+</script>
+</head><body>
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <a class="navbar-brand" href="#">Ticket Editor</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav1" aria-controls="navbarNav1" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse justify-content-left" id="navbarNav1">
+    <ul class="navbar-nav">
+    <li class="nav-item active">
+    <a class="nav-link" style="width:50px;" id='addButton'>ADD<span class="sr-only">(current)</span></a>
+    </li>
+    <li class="nav-item">
+    <a class="nav-link" style="width:100px;" id="total-point"></a>
+    </li>
+    <li class="nav-item">
+    <a class="nav-link" style="width:100px;"></a>
+    </li>
+    <li class="nav-item">
+    <a class="nav-link" style="width:100px;"></a>
+    </li>
+    <li class="nav-item">
+    <a class="nav-link" style="width:100px;"></a>
+    </li>
+    </ul>
+    </div>
+</nav>
+<div id='TextBoxesGroup'>
+</div>
+</body>
+</html>
