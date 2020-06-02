@@ -3,7 +3,6 @@ from datetime import datetime
 import json
 import threading
 
-
 #global objects
 z_index = 1
 ticket_id = 1
@@ -199,7 +198,7 @@ def message_received(client, server, message):
         #reply
         server.send_message_to_all(message)
 
-server = WebsocketServer(9999, host="localhost")
+server = WebsocketServer(9999, host="0.0.0.0")
 server.set_fn_new_client(new_client)
 server.set_fn_client_left(client_left)
 server.set_fn_message_received(message_received)

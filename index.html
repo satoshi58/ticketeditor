@@ -156,8 +156,10 @@ $(document).ready(function(){
                 if (textarea.outerHeight() > textarea.prop('scrollHeight')){
                     textarea.height(1);
                 }
+                var height = textarea.height();
                 while (textarea.outerHeight() < textarea.prop('scrollHeight')){
-                    textarea.height(textarea.height() + 1);
+                    height = height + 1;
+                    textarea.height(height);
                 }
                 //set point
                 parent.children('select.story-point').val(data.point);
@@ -243,8 +245,10 @@ $(document).ready(function(){
                     if (textarea.outerHeight() > textarea.prop('scrollHeight')){
                         textarea.height(1);
                     }
+                    var height = textarea.height();
                     while (textarea.outerHeight() < textarea.prop('scrollHeight')){
-                        textarea.height(textarea.height() + 1);
+                        height = height + 1;
+                        textarea.height(height);
                     }
                 }
                 break;
@@ -381,6 +385,11 @@ $(document).ready(function(){
             var jsonString = JSON.stringify(data);
             ws.send(jsonString);
         }
+    });
+
+    //point click actions
+    $(document).on('click','select.story-point', function(evt){
+        evt.stopPropagation();
     });
 
     //change point actions
@@ -561,8 +570,10 @@ $(document).ready(function(){
         if ($(this).outerHeight() > this.scrollHeight){
             $(this).height(1);
         }
+        var height = $(this).height();
         while ($(this).outerHeight() < this.scrollHeight){
-            $(this).height($(this).height() + 1);
+            height = height + 1;
+            $(this).height(height);
         }
     });
 
