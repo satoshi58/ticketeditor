@@ -1,4 +1,4 @@
-# tiket editor
+# ticket editor
  
 "ticket editor" is ticket web application
  
@@ -19,7 +19,7 @@ pip3 install websocket-server
 # Usage
   
 ```bash
-python server.py
+python3 server.py
 ```
  
 # Note
