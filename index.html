@@ -255,6 +255,13 @@ $(document).ready(function(){
             case "deleteTicket":
                 var parent = $("#" + data.id);
                 parent.remove();
+                var totalpoints = 0;
+                $('select.story-point').each(function(i, elm){
+                    if($(elm).val() != "-"){
+                        totalpoints += Number($(elm).val());
+                    }
+                });
+                $('#total-point').text('Total : ' + String(totalpoints));
                 break;
             case "lockTicket":
                 switch(data.next){
@@ -326,10 +333,44 @@ $(document).ready(function(){
         var data = {
             "method": "addTicket",
             "client_id": client_id,
-            "color": "#00a3d8"
+            "color": "#a8c6ff"
         }
         var jsonString = JSON.stringify(data);
         ws.send(jsonString);
+    });
+
+    //click event (tag)
+    $("#tagButton").click(function () {
+        var map = {};
+        //get #tags
+        $('textarea.auto-resize').each(function(i, elm){
+            var point = $(elm).parent().children('select.story-point').val();
+            if(point != '-'){
+                tags = $(elm).val().match(/[#＃][Ａ-Ｚａ-ｚA-Za-z一-鿆0-9０-９ぁ-ヶｦ-ﾟー._-]+/gm);
+                //alert(tags);
+                for (var tag of tags) {
+                    //alert(tag);
+                    if(map[tag]){
+                        map[tag] += Number(point);
+                    } else {
+                        map[tag] = Number(point);
+                    }
+                }
+            }
+        });
+        //sort map
+        var sorted = {};
+        var key = Object.keys(map);
+        key.sort();
+        for( var i = 0; i < key.length; i++ ) {
+            sorted[ key[i] ] = map[ key[i] ];
+        }
+        //output
+        var outtext = '';
+        for(var key in sorted){
+            outtext += (key + '\t' + map[key] + '\n');
+        }
+        alert(outtext);
     });
 
     //mouse move event
@@ -611,7 +652,10 @@ $(document).ready(function(){
     <div class="collapse navbar-collapse justify-content-left" id="navbarNav1">
     <ul class="navbar-nav">
     <li class="nav-item active">
-    <a class="nav-link" style="width:50px;" id='addButton'>ADD<span class="sr-only">(current)</span></a>
+    <a class="nav-link" style="width:50px;" id='addButton'>Add<span class="sr-only">(current)</span></a>
+    </li>
+    <li class="nav-item active">
+    <a class="nav-link" style="width:50px;" id='tagButton'>Tags<span class="sr-only">(current)</span></a>
     </li>
     <li class="nav-item">
     <a class="nav-link" style="width:100px;" id="total-point"></a>
