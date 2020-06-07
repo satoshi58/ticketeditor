@@ -104,6 +104,7 @@ $(document).ready(function(){
         switch(data.method){
             case "notifyClientID":
                 client_id = Number(data.client_id);
+                $('#sockStatus').css('color', 'green');
                 break;
             case "initTicket":
                 //add ticket
@@ -116,6 +117,7 @@ $(document).ready(function(){
                     + '<text class="annotation">Point:</text>'
                     + '<select class="story-point">'
                     + '<option hidden>-</option>'
+                    + '<option>0.3</option>'
                     + '<option>0.5</option>'
                     + '<option>1</option>'
                     + '<option>1.5</option>'
@@ -169,6 +171,9 @@ $(document).ready(function(){
                         totalpoints += Number($(elm).val());
                     }
                 });
+                totalpoints *= 10;
+                totalpoints = Math.round(totalpoints,2);
+                totalpoints /= 10;
                 $('#total-point').text('Total : ' + String(totalpoints));
                 //set color
                 parent.css('background', data.color);
@@ -187,6 +192,7 @@ $(document).ready(function(){
                     + '<text class="annotation">Point:</text>'
                     + '<select class="story-point" size="1">'
                     + '<option hidden>-</option>'
+                    + '<option>0.3</option>'
                     + '<option>0.5</option>'
                     + '<option>1</option>'
                     + '<option>1.5</option>'
@@ -261,6 +267,9 @@ $(document).ready(function(){
                         totalpoints += Number($(elm).val());
                     }
                 });
+                totalpoints *= 10;
+                totalpoints = Math.round(totalpoints,2);
+                totalpoints /= 10;
                 $('#total-point').text('Total : ' + String(totalpoints));
                 break;
             case "lockTicket":
@@ -309,6 +318,9 @@ $(document).ready(function(){
                         totalpoints += Number($(elm).val());
                     }
                 });
+                totalpoints *= 10;
+                totalpoints = Math.round(totalpoints,2);
+                totalpoints /= 10;
                 $('#total-point').text('Total : ' + String(totalpoints));
                 break;
             case "setColor":
@@ -325,6 +337,7 @@ $(document).ready(function(){
 
     //web socket close
     ws.onclose = function(message){
+        $('#sockStatus').css('color', 'red');
         console.log(message.type);
     };
 
@@ -348,12 +361,12 @@ $(document).ready(function(){
             if(point != '-'){
                 tags = $(elm).val().match(/[#＃][Ａ-Ｚａ-ｚA-Za-z一-鿆0-9０-９ぁ-ヶｦ-ﾟー._-]+/gm);
                 //alert(tags);
-                for (var tag of tags) {
+                for (var key in tags) {
                     //alert(tag);
-                    if(map[tag]){
-                        map[tag] += Number(point);
+                    if(map[tags[key]]){
+                        map[tags[key]] += Number(point);
                     } else {
-                        map[tag] = Number(point);
+                        map[tags[key]] = Number(point);
                     }
                 }
             }
@@ -368,7 +381,7 @@ $(document).ready(function(){
         //output
         var outtext = '';
         for(var key in sorted){
-            outtext += (key + '\t' + map[key] + '\n');
+            outtext += (key + ' : ' + map[key] + '\n');
         }
         alert(outtext);
     });
@@ -661,13 +674,7 @@ $(document).ready(function(){
     <a class="nav-link" style="width:100px;" id="total-point"></a>
     </li>
     <li class="nav-item">
-    <a class="nav-link" style="width:100px;"></a>
-    </li>
-    <li class="nav-item">
-    <a class="nav-link" style="width:100px;"></a>
-    </li>
-    <li class="nav-item">
-    <a class="nav-link" style="width:100px;"></a>
+    <a class="nav-link" style="width:40px;color:red;" id='sockStatus'>■<span class="sr-only">(current)</span></a>
     </li>
     </ul>
     </div>

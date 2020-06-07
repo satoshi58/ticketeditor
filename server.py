@@ -1,7 +1,12 @@
 from websocket_server import WebsocketServer
 from datetime import datetime
+import os
 import json
 import threading
+import datetime
+import sys
+
+from ticket import Ticket
 
 #global objects
 z_index = 1
@@ -9,59 +14,51 @@ ticket_id = 1
 tickets = {}
 lock = threading.Lock()
 
-class Ticket:
-    ticket_id = 0
-    locked = False
-    locker = 0
-    text = ""
-    owner = 0
-    top = 0
-    left = 0
-    point = "-"
-    color = "#ffffff"
-    removed = False
-    def __init__(self, ticket_id, owner):
-        self.ticket_id = ticket_id
-        self.owner = owner
-    def setText(self, text):
-        self.text = text
-    def setPos(self, top, left):
-        self.top = top
-        self.left = left
-    def setPoint(self, point):
-        self.point = point
-    def setColor(self, color):
-        self.color = color
-    def lock(self, client_id):
-        if self.locked == False and self.locker == 0:
-            self.locked = True
-            self.locker = client_id
-            return True
-        else:
-            return False
-    def release(self, client_id):
-        if self.locked == True and self.locker == client_id:
-            self.locked = False
-            self.locker = 0
-            return True
-        else:
-            return False
-    def remove(self):
-        self.removed = True
-    def isRemoved(self):
-        return self.removed
-    def getTiekctID(self):
-        return self.ticket_id
-    def getText(self):
-        return self.text
-    def getTop(self):
-        return self.top
-    def getLeft(self):
-        return self.left
-    def getPoint(self):
-        return self.point
-    def getColor(self):
-        return self.color
+def import_ticket(path):
+    global ticket_id
+    global tickets
+    with open(path) as f:
+        jsonString = f.read()
+        import_data = json.loads(jsonString)
+        array = import_data['ticket_list']
+        for element in array:
+            tid = element['ticket_id']
+            owner = 0
+            left = element['left']
+            top = element['top']
+            point = element['point']
+            color = element['color']
+            text = element['text']
+            ticket = Ticket(tid, owner)
+            ticket.setPos(top, left)
+            ticket.setColor(color)
+            ticket.setPoint(point)
+            ticket.setText(text)
+            tickets[tid] = ticket
+            if(tid >= ticket_id):
+                ticket_id = tid + 1
+
+def export_ticket(path):
+    global tickets
+    array = []
+    for key in tickets:
+        if tickets[key].isRemoved() == False:
+            data = {
+                "ticket_id": tickets[key].getTiekctID(),
+                "top": tickets[key].getTop(),
+                "left": tickets[key].getLeft(),
+                "text": tickets[key].getText(),
+                "point": tickets[key].getPoint(),
+                "color": tickets[key].getColor()
+            }
+            array.append(data)
+    exportdata = {
+        "ticket_list": array
+    }
+    jsonString = json.dumps(exportdata)
+    with open(path, mode='w') as f:
+        f.write(jsonString)
+    return jsonString
 
 def new_client(client, server):
     global tickets
@@ -90,6 +87,13 @@ def new_client(client, server):
             server.send_message(client, jsonString)
 
 def client_left(client, server):
+    jsonfile = './' + datetime.datetime.now().strftime('%Y%m%d') + '.json'
+    #lock
+    lock.acquire()
+    #write to json file
+    export_ticket(jsonfile)
+    #release
+    lock.release()
     #release all tickets
     for key in tickets:
         tickets[key].release(client['id'])
@@ -99,10 +103,13 @@ def message_received(client, server, message):
     global tickets
     global ticket_id
     global lock
+    global jsonfile
     recv = json.loads(message)
     if recv['method'] == "addTicket":
         #lock
         lock.acquire()
+        #write to json file
+        export_ticket(jsonfile)
         #create new ticket
         ticket = Ticket(ticket_id, recv['client_id'])
         ticket.setColor(recv['color'])
@@ -197,9 +204,27 @@ def message_received(client, server, message):
         ticket.setColor(recv['color'])
         #reply
         server.send_message_to_all(message)
+    if recv['method'] == "save":
+        jsonfile = './' + datetime.datetime.now().strftime('%Y%m%d') + '.json'
+        #lock
+        lock.acquire()
+        #write to json file
+        export_ticket(jsonfile)
+        #release
+        lock.release()
 
-server = WebsocketServer(9999, host="0.0.0.0")
-server.set_fn_new_client(new_client)
-server.set_fn_client_left(client_left)
-server.set_fn_message_received(message_received)
-server.run_forever()
+if __name__ == '__main__':
+    #load parameter file
+    args = sys.argv
+    if len(args) > 1 and os.path.isfile(args[1]):
+        import_ticket(args[1])
+    else:
+        jsonfile = './' + datetime.datetime.now().strftime('%Y%m%d') + '.json'
+        if os.path.isfile(jsonfile):
+            import_ticket(jsonfile)
+
+    server = WebsocketServer(9999, host="0.0.0.0")
+    server.set_fn_new_client(new_client)
+    server.set_fn_client_left(client_left)
+    server.set_fn_message_received(message_received)
+    server.run_forever()
