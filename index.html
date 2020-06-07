@@ -112,6 +112,7 @@ $(document).ready(function(){
                 newTextBoxDiv.attr("class", 'ticket');
                 newTextBoxDiv.after().html(
                     '<button type="button" class="close" style="margin-top:-8px;">&times;</button>' 
+                    + '<button type="button" class="btn btn-small export" style="float:left;margin-top:-5px;margin-left:-5px;font-size:8px;">Jira</button>' 
                     + '<textarea></textarea>'
                     + '<text class="ticketno">#' + data.ticket_id + '</text>'
                     + '<text class="annotation">Point:</text>'
@@ -180,6 +181,12 @@ $(document).ready(function(){
                 parent.children('textarea.auto-resize').css('background', data.color);
                 parent.children('select.story-point').css('background', data.color);
                 parent.children('input.color-dialog').val(data.color);
+                //
+                if(data.fixed == true){
+                    parent.children('button.close').text('');
+                    parent.children('button.export').css('color', 'gray');
+                    parent.children('button.export').removeClass('export');
+                }
                 break;
             case "addTicket":
                 //add ticket
@@ -187,6 +194,7 @@ $(document).ready(function(){
                 newTextBoxDiv.attr("class", 'ticket');
                 newTextBoxDiv.after().html(
                     '<button type="button" class="close" style="margin-top:-8px;">&times;</button>' 
+                    + '<button type="button" class="btn btn-small export" style="float:left;margin-top:-5px;margin-left:-5px;font-size:8px;">Jira</button>' 
                     + '<textarea></textarea>'
                     + '<text class="ticketno">#' + data.ticket_id + '</text>'
                     + '<text class="annotation">Point:</text>'
@@ -332,6 +340,12 @@ $(document).ready(function(){
                     parent.children('input.color-dialog').val(data.color);
                 }
                 break;
+            case "exportToJira":
+                var parent = $("#TextBoxDiv" + data.ticket_id);
+                parent.children('button.close').text('');
+                parent.children('button.export').css('color', 'gray');
+                parent.children('button.export').removeClass('export');
+                break;
         }
     }
 
@@ -384,6 +398,40 @@ $(document).ready(function(){
             outtext += (key + ' : ' + map[key] + '\n');
         }
         alert(outtext);
+    });
+
+    $(document).on('click','button.export', function(evt){
+        if(!confirm('Do you want to export this ticket to Jira?\n(This ticket can no longer be edited)')){
+            //cansel
+            return false;
+        }else{
+            //ok
+            var summary = '';
+            var description = '';
+            var parent = $(this).parent();
+            /*
+            var texts = parent.children('textarea.auto-resize').val();
+            var lines = texts.split(/\r\n|\r|\n/);
+            for(var i = 0; i < lines.length; i++){
+                if(i == 0){
+                    summary = lines[i];
+                } else {
+                    description += lines[i] + '\n';
+                }
+            }
+            */
+            var data = {
+                "method": "exportToJira",
+                "client_id": client_id,
+                "id": parent.attr("id"),
+                "ticket_id": parent.attr("id").replace(/[^0-9]/g, ''),
+                "summary": summary,
+                "description": description
+            }
+            var jsonString = JSON.stringify(data);
+            ws.send(jsonString);
+        }
+        evt.stopPropagation();
     });
 
     //mouse move event

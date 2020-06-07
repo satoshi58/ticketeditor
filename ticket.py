@@ -1,3 +1,6 @@
+
+import base64
+
 class Ticket:
     ticket_id = 0
     locked = False
@@ -9,6 +12,7 @@ class Ticket:
     point = "-"
     color = "#ffffff"
     removed = False
+    fixed = False
     def __init__(self, ticket_id, owner):
         self.ticket_id = ticket_id
         self.owner = owner
@@ -21,10 +25,14 @@ class Ticket:
         self.point = point
     def setColor(self, color):
         self.color = color
-    def forceLock(self):
-        #force lock
-        self.locked = True
-        self.locker = -1
+    def fix(self):
+        if self.lock(0) == True:
+            self.fixed = True
+            return True
+        else:
+            return False
+    def isFixed(self):
+        return self.fixed
     def lock(self, client_id):
         if self.locked == False and self.locker == 0:
             self.locked = True
@@ -55,3 +63,21 @@ class Ticket:
         return self.point
     def getColor(self):
         return self.color
+    def exportToJira(self):
+        return False
+        if self.fix() == True:
+            summary = ''
+            description = ''
+            text = self.getText()
+            decoded = base64.b64decode(text)
+            utf8string = decoded.decode(encoding='utf-8')
+            lines = utf8string.splitlines()
+            for line in lines:
+                if summary == '':
+                    summary = line
+                else:
+                    description += line + '\n'
+            print('S:' + summary)
+            print('D:' + description)
+            return True
+        return False

@@ -29,11 +29,14 @@ def import_ticket(path):
             point = element['point']
             color = element['color']
             text = element['text']
+            fixed = element['fixed']
             ticket = Ticket(tid, owner)
             ticket.setPos(top, left)
             ticket.setColor(color)
             ticket.setPoint(point)
             ticket.setText(text)
+            if fixed == True:
+                ticket.fix()
             tickets[tid] = ticket
             if(tid >= ticket_id):
                 ticket_id = tid + 1
@@ -49,7 +52,8 @@ def export_ticket(path):
                 "left": tickets[key].getLeft(),
                 "text": tickets[key].getText(),
                 "point": tickets[key].getPoint(),
-                "color": tickets[key].getColor()
+                "color": tickets[key].getColor(),
+                "fixed": tickets[key].isFixed()
             }
             array.append(data)
     exportdata = {
@@ -81,7 +85,8 @@ def new_client(client, server):
                 "left": tickets[key].getLeft(),
                 "text": tickets[key].getText(),
                 "point": tickets[key].getPoint(),
-                "color": tickets[key].getColor()
+                "color": tickets[key].getColor(),
+                "fixed": tickets[key].isFixed()
             }
             jsonString = json.dumps(data)
             server.send_message(client, jsonString)
@@ -212,6 +217,12 @@ def message_received(client, server, message):
         export_ticket(jsonfile)
         #release
         lock.release()
+    if recv['method'] == "exportToJira":
+        #set color
+        temp_ticket_id = int(recv['ticket_id'])
+        ticket = tickets[temp_ticket_id]
+        if ticket.exportToJira() == True:
+            server.send_message_to_all(message)
 
 if __name__ == '__main__':
     #load parameter file
