@@ -29,12 +29,20 @@ def import_ticket(path):
             point = element['point']
             color = element['color']
             text = element['text']
-            fixed = element['fixed']
+            if 'fixed' in element:
+                fixed = element['fixed']
+            else:
+                fixed = False
+            if 'key' in element:
+                key = element['key']
+            else:
+                key = ""
             ticket = Ticket(tid, owner)
             ticket.setPos(top, left)
             ticket.setColor(color)
             ticket.setPoint(point)
             ticket.setText(text)
+            ticket.setKey(key)
             if fixed == True:
                 ticket.fix()
             tickets[tid] = ticket
@@ -53,7 +61,8 @@ def export_ticket(path):
                 "text": tickets[key].getText(),
                 "point": tickets[key].getPoint(),
                 "color": tickets[key].getColor(),
-                "fixed": tickets[key].isFixed()
+                "fixed": tickets[key].isFixed(),
+                "key": tickets[key].getKey()
             }
             array.append(data)
     exportdata = {
@@ -221,8 +230,23 @@ def message_received(client, server, message):
         #set color
         temp_ticket_id = int(recv['ticket_id'])
         ticket = tickets[temp_ticket_id]
-        if ticket.exportToJira() == True:
-            server.send_message_to_all(message)
+        ticket.setTag(recv['tag'])
+        ticket.exportToJira()
+    if recv['method'] == "importFromJira":
+        #lock
+        lock.acquire()
+        #create new ticket
+        ticket = Ticket(ticket_id, recv['client_id'])
+        ticket.setColor(recv['color'])
+        ticket.importFromJira(recv['key'])
+        tickets[ticket_id] = ticket
+        #reply
+        recv['ticket_id'] = ticket_id
+        recv['text'] = ticket.getText()
+        jsonString = json.dumps(recv)
+        ticket_id = ticket_id + 1
+        server.send_message_to_all(jsonString)
+        lock.release()
 
 if __name__ == '__main__':
     #load parameter file

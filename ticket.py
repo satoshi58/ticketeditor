@@ -1,5 +1,8 @@
 
 import base64
+import json
+
+from jira import Jira
 
 class Ticket:
     ticket_id = 0
@@ -13,6 +16,8 @@ class Ticket:
     color = "#ffffff"
     removed = False
     fixed = False
+    tag = ""
+    key = ""
     def __init__(self, ticket_id, owner):
         self.ticket_id = ticket_id
         self.owner = owner
@@ -25,6 +30,10 @@ class Ticket:
         self.point = point
     def setColor(self, color):
         self.color = color
+    def setKey(self, key):
+        self.key = key
+    def setTag(self, tag):
+        self.tag = tag
     def fix(self):
         if self.lock(0) == True:
             self.fixed = True
@@ -63,21 +72,35 @@ class Ticket:
         return self.point
     def getColor(self):
         return self.color
+    def getKey(self):
+        return self.key
     def exportToJira(self):
-        return False
-        if self.fix() == True:
-            summary = ''
-            description = ''
-            text = self.getText()
-            decoded = base64.b64decode(text)
-            utf8string = decoded.decode(encoding='utf-8')
-            lines = utf8string.splitlines()
-            for line in lines:
-                if summary == '':
-                    summary = line
-                else:
-                    description += line + '\n'
-            print('S:' + summary)
-            print('D:' + description)
-            return True
-        return False
+        summary = ''
+        description = ''
+        text = self.getText()
+        decoded = base64.b64decode(text)
+        utf8string = decoded.decode(encoding='utf-8')
+        lines = utf8string.splitlines()
+        for line in lines:
+            if summary == '':
+                summary = line
+            else:
+                description += line + '\n'
+        jira = Jira()
+        jira.create_session()
+        if not self.key:
+            response = jira.create_ticket(self.tag, summary, description)
+            jsontext = json.loads(response.text)
+            self.key = jsontext['key']
+        else:
+            jira.update_ticket(self.key, summary, description)
+    def importFromJira(self, key):
+        jira = Jira()
+        jira.create_session()
+        response = jira.get_ticket_info(key)
+        jsontext = json.loads(response.text)
+        textfield = jsontext['fields']['summary'] + '\n' + jsontext['fields']['description']
+        encoded = textfield.encode(encoding='utf-8')
+        b64 = base64.b64encode(encoded)
+        self.text = b64.decode()
+        self.key = key

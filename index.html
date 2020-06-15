@@ -88,6 +88,12 @@ $(document).ready(function(){
     //editimg object
     var editing = null;
 
+    //ticket default color
+    var default_color = "#a8c6ff"
+
+    //default ticket_tag
+    var ticket_tag = "ABCD"
+
     //web socket open
     ws.onopen = function(message){
         console.log(message.type);
@@ -146,10 +152,10 @@ $(document).ready(function(){
                 }
                 //set text
                 var textarea = parent.children('textarea.auto-resize');
-                let binary = atob(data.text);
-                let len = binary.length;
-                let bytes = new Uint8Array(len);
-                for (let i = 0; i < len; i++)        {
+                var binary = atob(data.text);
+                var len = binary.length;
+                var bytes = new Uint8Array(len);
+                for (var i = 0; i < len; i++)        {
                     bytes[i] = binary.charCodeAt(i);
                 }
                 text = (new TextDecoder).decode(bytes)
@@ -346,6 +352,88 @@ $(document).ready(function(){
                 parent.children('button.export').css('color', 'gray');
                 parent.children('button.export').removeClass('export');
                 break;
+            case "importFromJira":
+                //add ticket
+                var newTextBoxDiv = $(document.createElement('div')).attr("id", 'TextBoxDiv' + data.ticket_id);
+                newTextBoxDiv.attr("class", 'ticket');
+                newTextBoxDiv.after().html(
+                    '<button type="button" class="close" style="margin-top:-8px;">&times;</button>' 
+                    + '<button type="button" class="btn btn-small export" style="float:left;margin-top:-5px;margin-left:-5px;font-size:8px;">Jira</button>' 
+                    + '<textarea></textarea>'
+                    + '<text class="ticketno">#' + data.ticket_id + '</text>'
+                    + '<text class="annotation">Point:</text>'
+                    + '<select class="story-point">'
+                    + '<option hidden>-</option>'
+                    + '<option>0.3</option>'
+                    + '<option>0.5</option>'
+                    + '<option>1</option>'
+                    + '<option>1.5</option>'
+                    + '<option>2</option>'
+                    + '<option>3</option>'
+                    + '<option>4</option>'
+                    + '<option>5</option>'
+                    + '<option>8</option>'
+                    + '<option>13</option>'
+                    + '</select>'
+                    + '<text class="annotation">Color:</text>'
+                    + '<input class="color-dialog" type="color" value="' + data.color + '">');
+                //set textarea to readonly
+                var textarea = newTextBoxDiv.children("textarea");
+                textarea.attr("class", 'auto-resize');
+                textarea.attr('readonly',true);
+                newTextBoxDiv.appendTo("#TextBoxesGroup");
+                //set position
+                var parent = $("#TextBoxDiv" + data.ticket_id);
+                if(data.top != 0){
+                    parent.css("top", Number(data.top));
+                }
+                if(data.left != 0){
+                    parent.css("left", Number(data.left));
+                }
+                //set text
+                var textarea = parent.children('textarea.auto-resize');
+                var binary = atob(data.text);
+                var len = binary.length;
+                var bytes = new Uint8Array(len);
+                for (var i = 0; i < len; i++)        {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                text = (new TextDecoder).decode(bytes)
+                textarea.val(text);
+                var outerHeight = textarea.outerHeight();
+                var schrollHeight = textarea.prop('scrollHeight');
+                if (textarea.outerHeight() > textarea.prop('scrollHeight')){
+                    textarea.height(1);
+                }
+                var height = textarea.height();
+                while (textarea.outerHeight() < textarea.prop('scrollHeight')){
+                    height = height + 1;
+                    textarea.height(height);
+                }
+                //set point
+                parent.children('select.story-point').val(data.point);
+                var totalpoints = 0;
+                $('select.story-point').each(function(i, elm){
+                    if($(elm).val() != "-"){
+                        totalpoints += Number($(elm).val());
+                    }
+                });
+                totalpoints *= 10;
+                totalpoints = Math.round(totalpoints,2);
+                totalpoints /= 10;
+                $('#total-point').text('Total : ' + String(totalpoints));
+                //set color
+                parent.css('background', data.color);
+                parent.children('textarea.auto-resize').css('background', data.color);
+                parent.children('select.story-point').css('background', data.color);
+                parent.children('input.color-dialog').val(data.color);
+                //
+                if(data.fixed == true){
+                    parent.children('button.close').text('');
+                    parent.children('button.export').css('color', 'gray');
+                    parent.children('button.export').removeClass('export');
+                }
+                break;
         }
     }
 
@@ -360,7 +448,7 @@ $(document).ready(function(){
         var data = {
             "method": "addTicket",
             "client_id": client_id,
-            "color": "#a8c6ff"
+            "color": default_color
         }
         var jsonString = JSON.stringify(data);
         ws.send(jsonString);
@@ -400,8 +488,22 @@ $(document).ready(function(){
         alert(outtext);
     });
 
+    //click event (import)
+    $("#importButton").click(function () {
+        key = prompt("Please enter Jira ticket key to import (ex." + ticket_tag + "-0123)", ticket_tag + "-0123");
+
+        var data = {
+            "method": "importFromJira",
+            "client_id": client_id,
+            "color": default_color,
+            "key": key
+        }
+        var jsonString = JSON.stringify(data);
+        ws.send(jsonString);
+    });
+
     $(document).on('click','button.export', function(evt){
-        if(!confirm('Do you want to export this ticket to Jira?\n(This ticket can no longer be edited)')){
+        if(!confirm('Export this ticket to Jira?\n(This ticket can no longer be edited)')){
             //cansel
             return false;
         }else{
@@ -409,22 +511,12 @@ $(document).ready(function(){
             var summary = '';
             var description = '';
             var parent = $(this).parent();
-            /*
-            var texts = parent.children('textarea.auto-resize').val();
-            var lines = texts.split(/\r\n|\r|\n/);
-            for(var i = 0; i < lines.length; i++){
-                if(i == 0){
-                    summary = lines[i];
-                } else {
-                    description += lines[i] + '\n';
-                }
-            }
-            */
             var data = {
                 "method": "exportToJira",
                 "client_id": client_id,
                 "id": parent.attr("id"),
                 "ticket_id": parent.attr("id").replace(/[^0-9]/g, ''),
+                "tag": ticket_tag,
                 "summary": summary,
                 "description": description
             }
@@ -714,6 +806,9 @@ $(document).ready(function(){
     <ul class="navbar-nav">
     <li class="nav-item active">
     <a class="nav-link" style="width:50px;" id='addButton'>Add<span class="sr-only">(current)</span></a>
+    </li>
+    <li class="nav-item active">
+    <a class="nav-link" style="width:80px;" id='importButton'>Import<span class="sr-only">(current)</span></a>
     </li>
     <li class="nav-item active">
     <a class="nav-link" style="width:60px;" id='tagButton'>#Tags<span class="sr-only">(current)</span></a>
