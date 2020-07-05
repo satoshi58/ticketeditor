@@ -30,7 +30,7 @@ class Jira:
             'password': self.jira_password
         }
         result = requests.post(url, headers=headers, json=body, proxies=self.proxies)
-        text = json.load(result.text)
+        text = json.loads(result.text)
         self.session_name = text['session']['name']
         self.session_value = text['session']['value']
         return True
