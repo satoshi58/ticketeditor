@@ -1,262 +1,252 @@
 from websocket_server import WebsocketServer
-from datetime import datetime
 import os
 import json
-import threading
 import datetime
 import sys
 
 from ticket import Ticket
+from session import Session
 
 #global objects
-z_index = 1
-ticket_id = 1
-tickets = {}
-lock = threading.Lock()
-
-def import_ticket(path):
-    global ticket_id
-    global tickets
-    with open(path) as f:
-        jsonString = f.read()
-        import_data = json.loads(jsonString)
-        array = import_data['ticket_list']
-        for element in array:
-            tid = element['ticket_id']
-            owner = 0
-            left = element['left']
-            top = element['top']
-            point = element['point']
-            color = element['color']
-            text = element['text']
-            if 'fixed' in element:
-                fixed = element['fixed']
-            else:
-                fixed = False
-            if 'key' in element:
-                key = element['key']
-            else:
-                key = ""
-            ticket = Ticket(tid, owner)
-            ticket.setPos(top, left)
-            ticket.setColor(color)
-            ticket.setPoint(point)
-            ticket.setText(text)
-            ticket.setKey(key)
-            if fixed == True:
-                ticket.fix()
-            tickets[tid] = ticket
-            if(tid >= ticket_id):
-                ticket_id = tid + 1
-
-def export_ticket(path):
-    global tickets
-    array = []
-    for key in tickets:
-        if tickets[key].isRemoved() == False:
-            data = {
-                "ticket_id": tickets[key].getTiekctID(),
-                "top": tickets[key].getTop(),
-                "left": tickets[key].getLeft(),
-                "text": tickets[key].getText(),
-                "point": tickets[key].getPoint(),
-                "color": tickets[key].getColor(),
-                "fixed": tickets[key].isFixed(),
-                "key": tickets[key].getKey()
-            }
-            array.append(data)
-    exportdata = {
-        "ticket_list": array
-    }
-    jsonString = json.dumps(exportdata)
-    with open(path, mode='w') as f:
-        f.write(jsonString)
-    return jsonString
+session_map = {}
+client_map = {}
+filename = datetime.datetime.now().strftime('%Y%m%d')
 
 def new_client(client, server):
-    global tickets
-    global lock
+    client_id = client['id']
     #notify client ID
     data = {
         "method": "notifyClientID",
-        "client_id": client['id']
+        "client_id": client_id
     }
     jsonString = json.dumps(data)
     server.send_message(client, jsonString)
 
-    #init tickets
-    for key in tickets:
-        if tickets[key].isRemoved() == False:
-            data = {
-                "method": "initTicket",
-                "ticket_id": tickets[key].getTiekctID(),
-                "top": tickets[key].getTop(),
-                "left": tickets[key].getLeft(),
-                "text": tickets[key].getText(),
-                "point": tickets[key].getPoint(),
-                "color": tickets[key].getColor(),
-                "fixed": tickets[key].isFixed()
-            }
-            jsonString = json.dumps(data)
-            server.send_message(client, jsonString)
-
 def client_left(client, server):
-    jsonfile = './' + datetime.datetime.now().strftime('%Y%m%d') + '.json'
-    #lock
-    lock.acquire()
-    #write to json file
-    export_ticket(jsonfile)
-    #release
-    lock.release()
+    global session_map
+    global client_map
+    global filename
+
+    #aruire session_id from client_id
+    client_id = client['id']
+    if client_id not in client_map:
+        print('error client_left, no client_id in client_map')
+        return 
+    session_id = client_map[client_id]
+
+    #acquire detached user's session
+    if session_id not in session_map:
+        print('error client_left, no session_id in session_map')
+        return 
+    session = session_map[session_id]
+
+    #write to json file    
+    jsonfile = './' + filename + '_' +  session_id  + '.json'
+    session.write(jsonfile)
     #release all tickets
-    for key in tickets:
-        tickets[key].release(client['id'])
+    session.release(client_id)
  
 def message_received(client, server, message):
-    global z_index
-    global tickets
-    global ticket_id
-    global lock
-    global jsonfile
+    global session_map
+    global client_map
+    global filename
+
+    #get parameters
     recv = json.loads(message)
+
+    #validation
+    if 'method' not in recv:
+        print('error message_received, no method in recv')
+        return
+    if 'client_id' not in recv:
+        print('error message_received, no client_id in recv')
+        return
+    client_id = recv['client_id']
+
+    if recv['method'] == 'connect':
+        #validation for connect
+        if 'session_id' not in recv:
+            print('error message_received, no sessio_id in recv (method=connect)')
+            return
+        session_id = recv['session_id']
+
+        #acquire session object
+        if session_id in session_map:
+            #use existing session object
+            session = session_map[session_id]
+        else:
+            #use new session object
+            session = Session(session_id)
+            #if data is in jsonfile, read it
+            jsonfile = './' + filename + '_' + session_id +'.json'
+            if os.path.isfile(jsonfile):
+                session.read(jsonfile)
+            session_map[session_id] = session
+
+        #init tickets
+        tickets = session.getTickets()
+        for key in tickets:
+            if tickets[key].isRemoved() == False:
+                data = {
+                    "method": "initTicket",
+                    "ticket_id": tickets[key].getTicketID(),
+                    "top": tickets[key].getTop(),
+                    "left": tickets[key].getLeft(),
+                    "text": tickets[key].getText(),
+                    "point": tickets[key].getPoint(),
+                    "color": tickets[key].getColor(),
+                    "fixed": tickets[key].isFixed()
+                }
+                jsonString = json.dumps(data)
+                server.send_message(client, jsonString)       
+        #now add session_id on client_map
+        client_map[client_id] = session_id
+        return
+
+    #get session_id and session object
+    if client_id not in client_map:
+        print('error message_received, no client_id in client_map')
+        return
+    session_id = client_map[client_id]
+    if session_id not in session_map:
+        print('error message_received, no session_id in session_map')
+        return
+    session = session_map[session_id]
+
     if recv['method'] == "addTicket":
-        #lock
-        lock.acquire()
-        #write to json file
-        export_ticket(jsonfile)
         #create new ticket
-        ticket = Ticket(ticket_id, recv['client_id'])
+        ticket_id = session.getNewTicketID()
+        ticket = Ticket(ticket_id, client_id)
         ticket.setColor(recv['color'])
-        tickets[ticket_id] = ticket
+        session.addTicket(ticket)
         #reply
         recv['ticket_id'] = ticket_id
+        recv['session_id'] = session_id
         jsonString = json.dumps(recv)
-        ticket_id = ticket_id + 1
         server.send_message_to_all(jsonString)
-        lock.release()
     if recv['method'] == "deleteTicket":
-        #lock
-        lock.acquire()
         #delete
-        temp_ticket_id = int(recv['ticket_id'])
-        temp_client_id = int(recv['client_id'])
-        ticket = tickets[temp_ticket_id]
-        if(ticket.lock(temp_client_id)):
+        ticket_id = int(recv['ticket_id'])
+        tickets = session.getTickets()
+        ticket = tickets[ticket_id]
+        if(ticket.lock(client_id)):
             #NOT delete
-            tickets[temp_ticket_id].remove()
+            tickets[ticket_id].remove()
+            recv['session_id'] = session_id
+            jsonString = json.dumps(recv)
             #reply
-            server.send_message_to_all(message)
-        lock.release()
+            server.send_message_to_all(jsonString)
     if recv['method'] == "lockTicket":
-        #lock
-        lock.acquire()
-        #lock
-        temp_ticket_id = int(recv['ticket_id'])
-        temp_client_id = int(recv['client_id'])
-        ticket = tickets[temp_ticket_id]
-        if(ticket.lock(temp_client_id)):
+        ticket_id = int(recv['ticket_id'])
+        tickets = session.getTickets()
+        ticket = tickets[ticket_id]
+        if(ticket.lock(client_id)):
             recv['result'] = "OK"
         else:
             recv['result'] = "NG"
         #reply result
         if recv['next'] == "moveTicket":
-            recv['zindex'] = z_index
-            z_index = z_index + 1
+            recv['zindex'] = session.getNewZIndex()
+            recv['session_id'] = session_id
             jsonString = json.dumps(recv)
             server.send_message_to_all(jsonString)
         else:
+            recv['session_id'] = session_id
             jsonString = json.dumps(recv)
             server.send_message(client, jsonString)
-        lock.release()
     if recv['method'] == "releaseTicket":
-        #lock
-        lock.acquire()
         #release
-        temp_ticket_id = int(recv['ticket_id'])
-        temp_client_id = int(recv['client_id'])
-        ticket = tickets[temp_ticket_id]
-        if ticket.release(temp_client_id):
+        ticket_id = int(recv['ticket_id'])
+        tickets = session.getTickets()
+        ticket = tickets[ticket_id]
+        if ticket.release(client_id):
             recv['result'] = "OK"
         else:
             recv['result'] = "NG"
+        recv['session_id'] = session_id
         #reply result
         jsonString = json.dumps(recv)
         server.send_message(client, jsonString)
-        lock.release()
     if recv['method'] == "moveTicket":
         #set position
-        temp_ticket_id = int(recv['ticket_id'])
-        ticket = tickets[temp_ticket_id]
+        ticket_id = int(recv['ticket_id'])
+        tickets = session.getTickets()
+        ticket = tickets[ticket_id]
         ticket.setPos(recv['top'], recv['left'])
         #reply
-        server.send_message_to_all(message)
+        recv['session_id'] = session_id
+        jsonString = json.dumps(recv)
+        server.send_message_to_all(jsonString)
     if recv['method'] == "fixTicket":
         #set position
-        temp_ticket_id = int(recv['ticket_id'])
-        ticket = tickets[temp_ticket_id]
+        ticket_id = int(recv['ticket_id'])
+        tickets = session.getTickets()
+        ticket = tickets[ticket_id]
         ticket.setPos(recv['top'], recv['left'])
         #reply
-        server.send_message_to_all(message)
+        recv['session_id'] = session_id
+        jsonString = json.dumps(recv)
+        server.send_message_to_all(jsonString)
     if recv['method'] == "editTicket":
         #set text
-        temp_ticket_id = int(recv['ticket_id'])
-        ticket = tickets[temp_ticket_id]
+        ticket_id = int(recv['ticket_id'])
+        tickets = session.getTickets()
+        ticket = tickets[ticket_id]
         ticket.setText(recv['text'])
         #reply
-        server.send_message_to_all(message)
+        recv['session_id'] = session_id
+        jsonString = json.dumps(recv)
+        server.send_message_to_all(jsonString)
     if recv['method'] == "setPoint":
         #set ticket point
-        temp_ticket_id = int(recv['ticket_id'])
-        ticket = tickets[temp_ticket_id]
+        ticket_id = int(recv['ticket_id'])
+        tickets = session.getTickets()
+        ticket = tickets[ticket_id]
         ticket.setPoint(recv['point'])
         #reply
-        server.send_message_to_all(message)
+        recv['session_id'] = session_id
+        jsonString = json.dumps(recv)
+        server.send_message_to_all(jsonString)
     if recv['method'] == "setColor":
         #set color
-        temp_ticket_id = int(recv['ticket_id'])
-        ticket = tickets[temp_ticket_id]
+        ticket_id = int(recv['ticket_id'])
+        tickets = session.getTickets()
+        ticket = tickets[ticket_id]
         ticket.setColor(recv['color'])
         #reply
-        server.send_message_to_all(message)
+        recv['session_id'] = session_id
+        jsonString = json.dumps(recv)
+        server.send_message_to_all(jsonString)
     if recv['method'] == "save":
-        jsonfile = './' + datetime.datetime.now().strftime('%Y%m%d') + '.json'
-        #lock
-        lock.acquire()
         #write to json file
-        export_ticket(jsonfile)
-        #release
-        lock.release()
+        jsonfile = './' + filename + '_' + session_id + '.json'
+        #write to json file
+        session.write(jsonfile)
     if recv['method'] == "exportToJira":
         #set color
-        temp_ticket_id = int(recv['ticket_id'])
-        ticket = tickets[temp_ticket_id]
+        ticket_id = int(recv['ticket_id'])
+        tickets = session.getTickets()
+        ticket = tickets[ticket_id]
         ticket.setTag(recv['tag'])
         ticket.exportToJira()
     if recv['method'] == "importFromJira":
-        #lock
-        lock.acquire()
         #create new ticket
-        ticket = Ticket(ticket_id, recv['client_id'])
+        ticket_id = session.getNewTicketID()
+        ticket = Ticket(ticket_id, client_id)
         ticket.setColor(recv['color'])
         ticket.importFromJira(recv['key'])
-        tickets[ticket_id] = ticket
+        session.addTicket(ticket)
         #reply
-        recv['ticket_id'] = ticket_id
+        recv['ticket_id'] = ticket.getTicketID()
         recv['text'] = ticket.getText()
+        recv['session_id'] = session_id
         jsonString = json.dumps(recv)
-        ticket_id = ticket_id + 1
         server.send_message_to_all(jsonString)
-        lock.release()
 
 if __name__ == '__main__':
-    #load parameter file
     args = sys.argv
     if len(args) > 1 and os.path.isfile(args[1]):
-        import_ticket(args[1])
-    else:
-        jsonfile = './' + datetime.datetime.now().strftime('%Y%m%d') + '.json'
-        if os.path.isfile(jsonfile):
-            import_ticket(jsonfile)
+        filename = args[1]
 
     server = WebsocketServer(9999, host="0.0.0.0")
     server.set_fn_new_client(new_client)

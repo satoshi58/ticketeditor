@@ -1,6 +1,7 @@
 import requests
 import json
 
+#this is class for jira system link 
 class Jira:
     #access pass
     jira_username = ""
@@ -12,12 +13,12 @@ class Jira:
         "https": ""
     }
 
-    #session
-    session_name = ""
-    session_value = ""
-
     #server url
     server_url = ""
+
+    #jira session
+    session_name = None
+    session_value = None
 
     #login
     def create_session(self):
@@ -35,6 +36,7 @@ class Jira:
         self.session_value = text['session']['value']
         return True
 
+    #get ticket information
     def get_ticket_info(self, key):
         url = self.server_url + '/jira/rest/api/2/issue/' + key
         headers = {
@@ -44,6 +46,7 @@ class Jira:
         response = requests.get(url, headers=headers, proxies=self.proxies)
         return response
 
+    #create jira ticket
     def create_ticket(self, tag, summary, description):
         url = self.server_url + '/jira/rest/api/2/issue'
         headers = {
@@ -64,7 +67,8 @@ class Jira:
         }
         response = requests.post(url, headers=headers, json=body, proxies=self.proxies)
         return response
-    
+
+    #update jira ticket
     def update_ticket(self, key, summary, description):
         url = self.server_url + '/jira/rest/api/2/issue/' + key
         headers = {

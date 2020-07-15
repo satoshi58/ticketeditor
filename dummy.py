@@ -1,9 +1,11 @@
 import requests
 import json
 
+#this is dummy response class for HTTPS response
 class DummyResponse:
     text = ""
 
+#this is stab class for jira system link 
 class Jira:
     session = False
     def create_session(self):
@@ -28,7 +30,7 @@ class Jira:
         if self.session == False:
             return None
         data = {
-            "key": "ZZBV-1234"
+            "key": "ABCD-1234"
         }
         print('ticket created ' + summary + ' ' + description)
         response = DummyResponse

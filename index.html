@@ -70,7 +70,8 @@ $(document).ready(function(){
     //create web socket
     var ws = new WebSocket("ws://localhost:9999/");
 
-    //client id
+    //session and client id
+    var session_id = "default"
     var client_id = 0;
 
     //positions
@@ -82,6 +83,7 @@ $(document).ready(function(){
     var scrY = 0;
     var scrX2 = 0;
     var scrY2 = 0;
+    var zindex = 0
     //moving object
     var moving = null;
 
@@ -97,11 +99,6 @@ $(document).ready(function(){
     //web socket open
     ws.onopen = function(message){
         console.log(message.type);
-        var data = {
-            "method": "none"
-        }
-        var jsonString = JSON.stringify(data);
-        ws.send(jsonString);
     };
 
     //web socket message receive
@@ -111,6 +108,15 @@ $(document).ready(function(){
             case "notifyClientID":
                 client_id = Number(data.client_id);
                 $('#sockStatus').css('color', 'green');
+                //connect method
+                session_id = prompt("Please enter Session ID", session_id);
+                var data = {
+                    "method": "connect",
+                    "client_id": client_id,
+                    "session_id": session_id
+                }
+                var jsonString = JSON.stringify(data);
+                ws.send(jsonString);
                 break;
             case "initTicket":
                 //add ticket
@@ -195,6 +201,9 @@ $(document).ready(function(){
                 }
                 break;
             case "addTicket":
+                if(data.session_id != session_id){
+                    break;
+                }
                 //add ticket
                 var newTextBoxDiv = $(document.createElement('div')).attr("id", 'TextBoxDiv' + data.ticket_id);
                 newTextBoxDiv.attr("class", 'ticket');
@@ -230,8 +239,14 @@ $(document).ready(function(){
                 parent.children('textarea.auto-resize').css('background', data.color);
                 parent.children('select.story-point').css('background', data.color);
                 parent.children('input.color-dialog').val(data.color);
+                //zindex
+                parent.css('position','absolute')
+                parent.css('zIndex', zindex);
                 break;
             case "moveTicket":
+                if(data.session_id != session_id){
+                    break;
+                }
                 if(data.client_id != client_id){
                     //set element position
                     var parent = $("#" + data.id);
@@ -240,6 +255,9 @@ $(document).ready(function(){
                 }
                 break;
             case "fixTicket":
+                if(data.session_id != session_id){
+                    break;
+                }
                 if(data.client_id != client_id){
                     //set element position
                     var parent = $("#" + data.id);
@@ -248,6 +266,9 @@ $(document).ready(function(){
                 }
                 break;
             case "editTicket":
+                if(data.session_id != session_id){
+                    break;
+                }
                 if(data.client_id != client_id){
                     var parent = $("#" + data.id);
                     var textarea = parent.children('textarea.auto-resize');
@@ -273,6 +294,9 @@ $(document).ready(function(){
                 }
                 break;
             case "deleteTicket":
+                if(data.session_id != session_id){
+                    break;
+                }
                 var parent = $("#" + data.id);
                 parent.remove();
                 var totalpoints = 0;
@@ -287,6 +311,9 @@ $(document).ready(function(){
                 $('#total-point').text('Total : ' + String(totalpoints));
                 break;
             case "lockTicket":
+                if(data.session_id != session_id){
+                    break;
+                }
                 switch(data.next){
                     case "editTicket":
                         if(data.result == "OK"){
@@ -316,11 +343,15 @@ $(document).ready(function(){
                                 $("#" + data.id).css('position','absolute')
                                 $("#" + data.id).css('zIndex', data.zindex);
                             }
+                            zindex = data.zindex
                         }
                         break;
                 }
                 break;
             case "setPoint":
+                if(data.session_id != session_id){
+                    break;
+                }
                 if(data.client_id != client_id){
                     //set point
                     var parent = $("#" + data.id);
@@ -338,6 +369,9 @@ $(document).ready(function(){
                 $('#total-point').text('Total : ' + String(totalpoints));
                 break;
             case "setColor":
+                if(data.session_id != session_id){
+                    break;
+                }
                 if(data.client_id != client_id){
                     var parent = $("#TextBoxDiv" + data.ticket_id);
                     parent.css('background', data.color);
@@ -347,12 +381,18 @@ $(document).ready(function(){
                 }
                 break;
             case "exportToJira":
+                if(data.session_id != session_id){
+                    break;
+                }
                 var parent = $("#TextBoxDiv" + data.ticket_id);
                 parent.children('button.close').text('');
                 parent.children('button.export').css('color', 'gray');
                 parent.children('button.export').removeClass('export');
                 break;
             case "importFromJira":
+                if(data.session_id != session_id){
+                    break;
+                }
                 //add ticket
                 var newTextBoxDiv = $(document.createElement('div')).attr("id", 'TextBoxDiv' + data.ticket_id);
                 newTextBoxDiv.attr("class", 'ticket');
@@ -491,19 +531,20 @@ $(document).ready(function(){
     //click event (import)
     $("#importButton").click(function () {
         key = prompt("Please enter Jira ticket key to import (ex." + ticket_tag + "-0123)", ticket_tag + "-0123");
-
-        var data = {
-            "method": "importFromJira",
-            "client_id": client_id,
-            "color": default_color,
-            "key": key
+        if(key != null){
+            var data = {
+                "method": "importFromJira",
+                "client_id": client_id,
+                "color": default_color,
+                "key": key
+            }
+            var jsonString = JSON.stringify(data);
+            ws.send(jsonString);
         }
-        var jsonString = JSON.stringify(data);
-        ws.send(jsonString);
     });
 
     $(document).on('click','button.export', function(evt){
-        if(!confirm('Export this ticket to Jira?\n(This ticket can no longer be edited)')){
+        if(!confirm('Eexport this ticket to Jira?\n(This ticket can no longer be edited)')){
             //cansel
             return false;
         }else{
